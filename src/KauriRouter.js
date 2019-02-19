@@ -2,6 +2,7 @@ import * as path from "path";
 import * as fs from "fs";
 import * as Koa from "koa";
 import * as Router from "koa-router";
+import { knex } from './Database'
 
 /**
  * Generates an arbitrary amount of entries based on the
@@ -121,6 +122,9 @@ export const loadFiles = async deps => {
  */
 export class KauriServer {
   constructor(config) {
+    if (config.knex) {
+      this.initKnex(config.knex)
+    }
     // auto-load all routes files
     let routesPromise = loadFiles(config.routes);
 
@@ -263,9 +267,10 @@ export class KauriServer {
     const middleware_mode = Object.keys(this._middleware).includes(NODE_ENV)
       ? NODE_ENV
       : "production";
-    
+
     let middleware = this._middleware[middleware_mode] || []
     middleware.forEach(mid => this.app.use(mid));
+
     this.app.use(this.constructor.routes())
     this.app.use(this.constructor.allowedMethods())
 
@@ -277,5 +282,9 @@ export class KauriServer {
       );
       return this.app.listen(this._port);
     }
+  }
+
+  initKnex(config) {
+    knex(config)
   }
 }

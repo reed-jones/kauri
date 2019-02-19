@@ -6,4 +6,5 @@ export { QueryBuilder }
 export const knex = config => {
     let k = Knex(config)
     Model.knex(k)
+    return k;
 }
