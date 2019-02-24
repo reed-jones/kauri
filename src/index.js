@@ -12,6 +12,7 @@ import {
 import Model from "./Model";
 import Response from "./Response";
 import Router from "./Router";
+import { KauriHMR } from './HMRMiddleware'
 
 export {
   // collection
@@ -30,5 +31,6 @@ export {
   // model
   Model,
   Response,
-  Router
+  Router,
+  KauriHMR
 };

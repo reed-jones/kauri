@@ -1,8 +1,13 @@
-import * as path from "path";
-import * as fs from "fs";
-import * as Koa from "koa";
-import * as Router from "koa-router";
-import { knex } from './Database'
+import * as path from 'path';
+import * as fs from 'fs';
+import * as Koa from 'koa';
+import * as Router from 'koa-router';
+import { knex } from './Database';
+import { KauriHMR } from './HMRMiddleware';
+
+import koaStatic from 'koa-static';
+import bodyParser from 'koa-bodyparser';
+import logger from 'koa-logger';
 
 /**
  * Generates an arbitrary amount of entries based on the
@@ -12,7 +17,7 @@ import { knex } from './Database'
  * @param {Number} number number fo models to generate
  */
 export const factory = (creator, number = 1) => {
-  return new Array(number).fill().map(creator);
+    return new Array(number).fill().map(creator);
 };
 
 /**
@@ -23,8 +28,8 @@ export const factory = (creator, number = 1) => {
  *
  * @return {String}
  */
-export const env = (selector, fallback = "") => {
-  return process.env[selector] || fallback;
+export const env = (selector, fallback = '') => {
+    return process.env[selector] || fallback;
 };
 
 /**
@@ -37,11 +42,11 @@ export const env = (selector, fallback = "") => {
  * @return {Array}
  */
 export const walkDirs = (dir, fileList = []) => {
-  return fs.readdirSync(dir).reduce((acc, file) => {
-    return fs.statSync(path.join(dir, file)).isDirectory()
-      ? [...acc, ...walkDirs(path.join(dir, file, "/"), fileList)]
-      : [...acc, path.join(dir, file)];
-  }, []);
+    return fs.readdirSync(dir).reduce((acc, file) => {
+        return fs.statSync(path.join(dir, file)).isDirectory()
+            ? [...acc, ...walkDirs(path.join(dir, file, '/'), fileList)]
+            : [...acc, path.join(dir, file)];
+    }, []);
 };
 
 /**
@@ -54,19 +59,19 @@ export const walkDirs = (dir, fileList = []) => {
  * @return {Object}
  */
 export const importFiles = async (startPath, importFn) => {
-  let fileNames = walkDirs(startPath);
-  let files = {};
-  let reg = new RegExp(`(${startPath.replace("./", "")}\\/|\\.js)`, "g");
-  for (const file of fileNames) {
-    try {
-      let modules = await importFn(file.replace(reg, ""));
-      files = { ...files, [file.replace(reg, "")]: modules };
-    } catch (err) {
-      console.log(err);
+    let fileNames = walkDirs(startPath);
+    let files = {};
+    let reg = new RegExp(`(${startPath.replace('./', '')}\\/|\\.js)`, 'g');
+    for (const file of fileNames) {
+        try {
+            let modules = await importFn(file.replace(reg, ''));
+            files = { ...files, [file.replace(reg, '')]: modules };
+        } catch (err) {
+            console.log(err);
+        }
     }
-  }
 
-  return files;
+    return files;
 };
 
 /**
@@ -77,19 +82,19 @@ export const importFiles = async (startPath, importFn) => {
  * @return {Object}
  */
 export const resolveObject = async object => {
-  const keys = Object.keys(object);
+    const keys = Object.keys(object);
 
-  let promisedProperties = Object.entries(object).map(e => e[1]);
+    let promisedProperties = Object.entries(object).map(e => e[1]);
 
-  let resolvedValues = await Promise.all(promisedProperties);
+    let resolvedValues = await Promise.all(promisedProperties);
 
-  return resolvedValues.reduce(
-    (acc, cur, index) => ({
-      ...acc,
-      [keys[index]]: cur
-    }),
-    object
-  );
+    return resolvedValues.reduce(
+        (acc, cur, index) => ({
+            ...acc,
+            [keys[index]]: cur
+        }),
+        object
+    );
 };
 
 /**
@@ -112,7 +117,7 @@ export const resolveObject = async object => {
  */
 
 export const loadFiles = async deps => {
-  return await importFiles(deps.path, deps.loadFn);
+    return await importFiles(deps.path, deps.loadFn);
 };
 
 /**
@@ -121,170 +126,211 @@ export const loadFiles = async deps => {
  * @param {Object} router
  */
 export class KauriServer {
-  constructor(config) {
-    if (config.knex) {
-      this.initKnex(config.knex)
-    }
-    // auto-load all routes files
-    let routesPromise = loadFiles(config.routes);
+    constructor(config) {
+        if (config.knex) {
+            this.initKnex(config.knex);
+        }
+        // auto-load all routes files
+        let routesPromise = loadFiles(config.routes);
 
-    // auto-load all Controller files
-    let controllersPromise =
-      config.controllers && loadFiles(config.controllers);
+        // auto-load all Controller files
+        let controllersPromise =
+            config.controllers && loadFiles(config.controllers);
 
-    // auto-load all models for binding
-    let modelsPromise = config.models && loadFiles(config.models);
+        // auto-load all models for binding
+        let modelsPromise = config.models && loadFiles(config.models);
 
-    // app settings & defaults
-    let {
-      middleware = {},
-      port = 8000
-    } = (config.app || {})
-    this._middleware = middleware;
-    this._port = port;
+        // app settings & defaults
+        let { middleware = {}, port = 8000, hmrCompiler = null } =
+            config.app || {};
+        this._middleware = middleware;
+        this._port = port;
 
-    // Once the controllers & Routes have been loaded
-    Promise.all([routesPromise, controllersPromise, modelsPromise]).then(
-      ([routes, controllers, models]) => {
-        // reduce to a single array of route objects
-        routes = Object.entries(routes)
-          .map(([name, route]) => route.default.routes)
-          .reduce((acc, cur) => [...acc, ...cur]);
+        this._hmrCompiler = hmrCompiler;
 
-        routes.forEach(route => {
-          this.router[route.method](route.url, async (ctx, next) => {
-            // Model Parameter Binding
-            if (route.options.bind !== undefined && models) {
-              ctx.state = {
-                ...ctx.state,
-                ...(await this.bindParams(
-                  models,
-                  route.options.bind,
-                  ctx.params
-                ))
-              };
+        // Once the controllers & Routes have been loaded
+        Promise.all([routesPromise, controllersPromise, modelsPromise]).then(
+            ([routes, controllers, models]) => {
+                // reduce to a single array of route objects
+                routes = Object.entries(routes)
+                    .map(([name, route]) => route.default.routes)
+                    .reduce((acc, cur) => [...acc, ...cur]);
+
+                routes.forEach(route => {
+                    this.router[route.method](route.url, async (ctx, next) => {
+                        // Model Parameter Binding
+                        if (route.options.bind !== undefined && models) {
+                            ctx.state = {
+                                ...ctx.state,
+                                ...(await this.bindParams(
+                                    models,
+                                    route.options.bind,
+                                    ctx.params
+                                ))
+                            };
+                        }
+
+                        const nextMiddleware =
+                            route.callback ||
+                            (controllers &&
+                                this.kauriMiddleware(controllers, route)) ||
+                            (() => {});
+
+                        await nextMiddleware(ctx, next);
+                    });
+                });
             }
+        );
 
-            const nextMiddleware =
-              route.callback ||
-              (controllers && this.kauriMiddleware(controllers, route)) ||
-              (() => {});
-
-            await nextMiddleware(ctx, next);
-          });
-        });
-      }
-    );
-
-    // return router so that other koa-router options can be used
-    return this.serve();
-  }
-
-  static get router() {
-    if (!this._router) {
-      this._router = new Router();
-    }
-    return this._router;
-  }
-
-  get router() {
-    return this.constructor.router;
-  }
-
-  static get app() {
-    if (!this._app) {
-      this._app = new Koa();
-    }
-    return this._app;
-  }
-
-  get app() {
-    return this.constructor.app;
-  }
-
-  async bindParams(models, bindings, params) {
-    let binds = Object.entries(bindings);
-    let state = {};
-
-    for (const [key, model] of binds) {
-      switch (typeof model) {
-        case "string":
-          state[key] = models[model]["default"].find(params[key]);
-          break;
-        case "object":
-          state[key] = model.query(models[model.model]["default"], params);
-          break;
-      }
+        // return router so that other koa-router options can be used
+        return this.serve();
     }
 
-    return resolveObject(state);
-  }
-
-  /**
-   * Kauri middleware that assigns connects all routes with the
-   * appropriate controller
-   *
-   * @param {Object} controllers
-   * @param {Object} route
-   */
-  kauriMiddleware(controllers, route) {
-    return async function(ctx, next) {
-      let func = controllers[route.file] && controllers[route.file][route.func];
-
-      if (typeof func !== "function") {
-        ctx.throw(404, "Route Not Found");
-      }
-      let resp = (await controllers[route.file][route.func](ctx)) || {};
-
-      if (resp.isKauriResponse) {
-        ctx.type = resp.contentType || "text/plain";
-        ctx.body = resp.body || resp;
-      }
-    };
-  }
-
-  static routes() {
-    return this.router.routes();
-  }
-
-  static allowedMethods() {
-    return this.router.allowedMethods();
-  }
-
-  static enable() {
-    return [this.routes(), this.allowedMethods()];
-  }
-
-  /**
-   *  Begin serving the app
-   *
-   * @return {Object} koa app instance
-   */
-  serve() {
-    const NODE_ENV = env("NODE_ENV", "production");
-
-    // enable all user defined middleware
-    const middleware_mode = Object.keys(this._middleware).includes(NODE_ENV)
-      ? NODE_ENV
-      : "production";
-
-    let middleware = this._middleware[middleware_mode] || []
-    middleware.forEach(mid => this.app.use(mid));
-
-    this.app.use(this.constructor.routes())
-    this.app.use(this.constructor.allowedMethods())
-
-    if (NODE_ENV === "test") {
-      return this.app.listen();
-    } else {
-      console.log(
-        `Server is listening on localhost:${this._port} in ${NODE_ENV} mode`
-      );
-      return this.app.listen(this._port);
+    static get router() {
+        if (!this._router) {
+            this._router = new Router();
+        }
+        return this._router;
     }
-  }
 
-  initKnex(config) {
-    knex(config)
-  }
+    get router() {
+        return this.constructor.router;
+    }
+
+    static get app() {
+        if (!this._app) {
+            this._app = new Koa();
+        }
+        return this._app;
+    }
+
+    get app() {
+        return this.constructor.app;
+    }
+
+    async bindParams(models, bindings, params) {
+        let binds = Object.entries(bindings);
+        let state = {};
+
+        for (const [key, model] of binds) {
+            switch (typeof model) {
+                case 'string':
+                    state[key] = models[model]['default'].find(params[key]);
+                    break;
+                case 'object':
+                    state[key] = model.query(
+                        models[model.model]['default'],
+                        params
+                    );
+                    break;
+            }
+        }
+
+        return resolveObject(state);
+    }
+
+    /**
+     * Kauri middleware that assigns connects all routes with the
+     * appropriate controller
+     *
+     * @param {Object} controllers
+     * @param {Object} route
+     */
+    kauriMiddleware(controllers, route) {
+        return async function(ctx, next) {
+            let func =
+                controllers[route.file] && controllers[route.file][route.func];
+
+            if (typeof func !== 'function') {
+                ctx.throw(404, 'Route Not Found');
+            }
+            let resp = (await controllers[route.file][route.func](ctx)) || {};
+
+            if (resp.isKauriResponse) {
+                ctx.type = resp.contentType || 'text/plain';
+                ctx.body = resp.body || resp;
+            }
+        };
+    }
+
+    static routes() {
+        return this.router.routes();
+    }
+
+    static allowedMethods() {
+        return this.router.allowedMethods();
+    }
+
+    static enable() {
+        return [this.routes(), this.allowedMethods()];
+    }
+
+    get defaultMiddleware() {
+        return {
+            development: [
+                bodyParser({ enableTypes: ['form', 'json'] }),
+                koaStatic('./public'),
+                // // logs each request to the console
+                logger(),
+                this.constructor.routes(),
+                this.constructor.allowedMethods()
+            ],
+            production: [
+                bodyParser({ enableTypes: ['form', 'json'] }),
+                koaStatic('./public'),
+                this.constructor.routes(),
+                this.constructor.allowedMethods()
+            ]
+        };
+    }
+
+    /**
+     *  Begin serving the app
+     *
+     * @return {Object} koa app instance
+     */
+    serve() {
+        const NODE_ENV = env('NODE_ENV', 'production');
+
+        // enable all user defined middleware
+        const user_middleware_mode = Object.keys(this._middleware).includes(
+            NODE_ENV
+        )
+            ? NODE_ENV
+            : 'production';
+        const default_middleware_mode = Object.keys(this.defaultMiddleware).includes(
+            NODE_ENV
+        )
+            ? NODE_ENV
+            : 'production';
+
+        let user_middleware = this._middleware[user_middleware_mode] || [];
+        user_middleware.forEach(mid => this.app.use(mid));
+
+        let default_middleware = this.defaultMiddleware[
+            default_middleware_mode
+        ];
+        default_middleware.forEach(mid => this.app.use(mid));
+
+        if (NODE_ENV === 'development') {
+            KauriHMR.setConfig(this._hmrCompiler);
+            this.app.use(KauriHMR.dev());
+            this.app.use(KauriHMR.hot());
+        }
+
+        if (NODE_ENV === 'test') {
+            return this.app.listen();
+        } else {
+            console.log(
+                `Server is listening on localhost:${
+                    this._port
+                } in ${NODE_ENV} mode`
+            );
+            return this.app.listen(this._port);
+        }
+    }
+
+    initKnex(config) {
+        knex(config);
+    }
 }
