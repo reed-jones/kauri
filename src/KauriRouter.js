@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as Koa from 'koa';
 import * as Router from 'koa-router';
+import faker from 'faker'
 import { knex } from './Database';
 import { KauriHMR } from './HMRMiddleware';
 
@@ -17,7 +18,7 @@ import logger from 'koa-logger';
  * @param {Number} number number fo models to generate
  */
 export const factory = (creator, number = 1) => {
-    return new Array(number).fill().map(creator);
+    return new Array(number).fill().map(() => creator(faker));
 };
 
 /**
@@ -269,7 +270,7 @@ export class KauriServer {
         return {
             development: [
                 bodyParser({ enableTypes: ['form', 'json'] }),
-                koaStatic('./public'),
+                koaStatic('./public', { defer: true }),
                 // // logs each request to the console
                 logger(),
                 this.constructor.routes(),
@@ -277,7 +278,7 @@ export class KauriServer {
             ],
             production: [
                 bodyParser({ enableTypes: ['form', 'json'] }),
-                koaStatic('./public'),
+                koaStatic('./public', { defer: true}),
                 this.constructor.routes(),
                 this.constructor.allowedMethods()
             ]
@@ -312,7 +313,7 @@ export class KauriServer {
         ];
         default_middleware.forEach(mid => this.app.use(mid));
 
-        if (NODE_ENV === 'development') {
+        if (NODE_ENV === 'development' && this._hmrCompiler) {
             KauriHMR.setConfig(this._hmrCompiler);
             this.app.use(KauriHMR.dev());
             this.app.use(KauriHMR.hot());

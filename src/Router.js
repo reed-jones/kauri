@@ -126,7 +126,7 @@ export default class Router {
    * @param  {String} url
    * @param  {String} controller@func
    */
-  all(...args) {
+  crud(...args) {
     const [url, controller, options] = args
     // get all
     this._saveRoute('get', url, `${controller}@index`, options)
@@ -135,6 +135,10 @@ export default class Router {
     this._saveRoute('patch', `${url}/:id`, `${controller}@update`, options)
     this._saveRoute('put', `${url}/:id`, `${controller}@update`, options)
     this._saveRoute('del', `${url}/:id`, `${controller}@destroy`, options)
+  }
+
+  all(...args) {
+    this._saveRoute('all', ...args)
   }
 
   /**

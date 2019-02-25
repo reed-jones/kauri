@@ -1,4 +1,5 @@
-import Collection from "./Collection";
+
+// import Collection from "./Collection";
 import { knex, QueryBuilder } from "./Database";
 import {
   factory,
@@ -13,10 +14,11 @@ import Model from "./Model";
 import Response from "./Response";
 import Router from "./Router";
 import { KauriHMR } from './HMRMiddleware'
+import { spaRewrite, KauriSPA } from './SpaMiddleware'
 
 export {
   // collection
-  Collection,
+  // Collection,
   // database
   knex,
   QueryBuilder,
@@ -32,5 +34,8 @@ export {
   Model,
   Response,
   Router,
-  KauriHMR
+  // middleware
+  KauriHMR,
+  KauriSPA,
+  spaRewrite
 };
