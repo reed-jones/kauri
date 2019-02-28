@@ -21,7 +21,6 @@ import pug from 'pug'
 import ejs from 'ejs'
 import fs from 'fs'
 import { promisify } from 'util'
-
 const readFile = promisify(fs.readFile)
 
 // temporary hack
@@ -183,7 +182,7 @@ export default class Response {
    */
   async ejs(fileName, options = {}) {
     this._contentType = 'text/html'
-    
+
     if (config.routeTemplateCaching) {
       // if the first time running this file, we cache it
       if (!this.constructor._cached.pug[fileName]) {

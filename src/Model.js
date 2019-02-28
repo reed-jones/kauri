@@ -1,5 +1,4 @@
 import { plural } from 'pluralize'
-import { knex } from './Database'
 import { Model as ObjectionModel } from 'objection'
 
 export default class Model extends ObjectionModel {
@@ -35,7 +34,7 @@ export default class Model extends ObjectionModel {
    * var mystery = getRandomModel()
    * mystery.modelType
    * // -> User
-   * 
+   *
    * @return {String}
    */
   static get modelType() {
@@ -47,24 +46,9 @@ export default class Model extends ObjectionModel {
   }
 
   /**
-   * Ease the database connection querying. Chain knex methods
-   * to create a query.
-   * i.e. User.db.where({ id: 4 })
-   * 
-   * @return {Promise} promise object is the db connection to this classes table
-   */
-  static get db() {
-    return knex(this.tableName)
-  }
-
-  get db() {
-    return this.constructor.db
-  }
-
-  /**
    * Default identifier column. Defaults to 'id' override by setting
    * static idColumn to your desired identifier
-   * 
+   *
    * @return {String} Primary key/identifier column in the database
    */
   static get idColumn() {
@@ -81,9 +65,9 @@ export default class Model extends ObjectionModel {
 
    /**
     * Finds and returns the specific model from the database
-    * 
-    * @param {String|Number} id 
-    * 
+    *
+    * @param {String|Number} id
+    *
     * @return {Model} returns the model of the calling class type
     */
   static find(id) {
@@ -99,7 +83,7 @@ export default class Model extends ObjectionModel {
 
   /**
    * Saves all changes to this model
-   * 
+   *
    * @return {Promise}
    */
   save() {
@@ -108,7 +92,7 @@ export default class Model extends ObjectionModel {
 
   /**
    * Removes this model from the database
-   * 
+   *
    * @return {Promise}
    */
   delete() {
